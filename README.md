@@ -42,3 +42,23 @@ Since the application does not utilize automated Cron jobs, the following operat
 ## 6. Financial Tracking
 - **Buy-In**: Configured via the Admin Dashboard.
 - **Pool Total**: Calculated dynamically and displayed on the Player's main dashboard to ensure transparency regarding the prize pool.
+
+## 7. Directory Layout
+```
+/ (Root Directory)
+├── index.php         (Main entry point and HTML shell for the Single Page App)
+├── css/
+│   └── styles.css    (Core stylesheet)
+├── js/
+│   ├── app.js        (Core UI logic, user auth state, and view switching)
+│   ├── admin.js      (Admin dashboard operations, scoring calculations)
+│   └── nhl-api.js    (Dedicated functions for fetching and parsing the NHL JSON feed)
+└── data/
+    ├── settings.json (Global configuration, "Buy In" price, season name)
+    ├── users.json    (User credentials, encrypted emails, roles, firstLogin flags)
+    ├── games.json    (Persistent historical database of schedule and scores)
+    └── picks.json    (Mapping of userID to gameID and selected loser)
+```
+
+## 8. Visual Styles
+- Add a custom theme for each team in the NHL. Colours and text.
