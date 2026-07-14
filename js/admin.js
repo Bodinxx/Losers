@@ -219,17 +219,7 @@ const Admin = (() => {
                         title="${u.isActive ? 'Deactivate' : 'Activate'}">
                         ${u.isActive ? '🔒' : '🔓'}
                     </button>
-                    ${u.role !== 'admin' ? `<button class="btn btn-ghost btn-sm btn-paid-user"
-                        data-user-id="${u.id}" data-paid="${(u.hasPaid ?? false) ? 'true' : 'false'}"
-                        title="${(u.hasPaid ?? false) ? 'Mark unpaid' : 'Mark paid'}"
-                        aria-label="${(u.hasPaid ?? false) ? 'Mark unpaid' : 'Mark paid'}">
-                        ${(u.hasPaid ?? false) ? '💸' : '💳'}
-                    </button>` : `<button class="btn btn-ghost btn-sm btn-paid-user"
-                        data-user-id="${u.id}" data-paid="${(u.hasPaid ?? false) ? 'true' : 'false'}"
-                        title="${(u.hasPaid ?? false) ? 'Mark admin unpaid' : 'Mark admin paid'}"
-                        aria-label="${(u.hasPaid ?? false) ? 'Mark admin unpaid' : 'Mark admin paid'}">
-                        ${(u.hasPaid ?? false) ? '💸' : '💳'}
-                    </button>`}
+                    ${buildPaymentBtn(u)}
                     ${u.role !== 'admin' ? `<button class="btn btn-ghost btn-sm btn-delete-user"
                         data-user-id="${u.id}" data-username="${escHtml(u.username)}" title="Delete">🗑️</button>` : ''}
                 </td>
@@ -673,6 +663,15 @@ const Admin = (() => {
         if ((user.hasPaid ?? false) !== true) return '<span class="badge badge-warning">Unpaid</span>';
         const paidDate = user.paidAt ? ` · ${escHtml(new Date(user.paidAt).toLocaleDateString())}` : '';
         return `<span class="badge badge-success">Paid${paidDate}</span>`;
+    }
+
+    function buildPaymentBtn(user) {
+        const paid  = (user.hasPaid ?? false) === true;
+        const label = paid ? 'Mark unpaid' : 'Mark paid';
+        const icon  = paid ? '💸' : '💳';
+        return `<button class="btn btn-ghost btn-sm btn-paid-user"
+            data-user-id="${user.id}" data-paid="${paid ? 'true' : 'false'}"
+            title="${label}" aria-label="${label}">${icon}</button>`;
     }
 
     function formatCurrency(amount) {
