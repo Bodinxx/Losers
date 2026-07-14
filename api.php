@@ -83,6 +83,7 @@ switch ($action) {
     case 'create_user':   handleCreateUser($body);      break;
     case 'update_user':   handleUpdateUser($body);      break;
     case 'change_password': handleChangePassword($body); break;
+    case 'admin_reset_password': handleAdminResetPassword($body); break;
     case 'delete_user':   handleDeleteUser($body);      break;
     case 'save_pick':     handleSavePick($body);        break;
     case 'sync_games':    handleSyncGames($body);       break;
@@ -132,6 +133,9 @@ function handleGetUsers(): void
         'username' => $u['username'],
         'role'     => $u['role'],
         'isActive' => $u['isActive'] ?? true,
+        'isFirstLogin' => $u['isFirstLogin'] ?? false,
+        'hasPaid'  => $u['hasPaid'] ?? false,
+        'paidAt'   => $u['paidAt'] ?? null,
     ], $users);
     echo json_encode(array_values($public));
 }
@@ -324,6 +328,10 @@ function handleUpdateUser(array $body): void
         if ($u['id'] === $userId) {
             if (array_key_exists('preferences', $body)) $u['preferences'] = $body['preferences'];
             if (array_key_exists('isActive', $body))    $u['isActive']    = (bool) $body['isActive'];
+            if (array_key_exists('hasPaid', $body)) {
+                $u['hasPaid'] = (bool) $body['hasPaid'];
+                $u['paidAt']  = $u['hasPaid'] ? ($u['paidAt'] ?? date('c')) : null;
+            }
             if (array_key_exists('role', $body) && in_array($body['role'], ['admin','player'], true)) {
                 $u['role'] = $body['role'];
             }
@@ -390,6 +398,43 @@ function handleDeleteUser(array $body): void
         http_response_code(400);
         echo json_encode(['error' => 'id required']);
         return;
+    }
+
+    function handleAdminResetPassword(array $body): void
+    {
+        $users      = ensureFile('users', []);
+        $userId     = $body['id'] ?? '';
+        $hash       = $body['passwordHash'] ?? '';
+        $salt       = $body['salt'] ?? '';
+        $iterations = (int) ($body['iterations'] ?? 100000);
+
+        if ($userId === '' || $hash === '' || $salt === '' || $iterations < 10000) {
+            http_response_code(400);
+            echo json_encode(['error' => 'id, passwordHash, salt, and valid iterations required']);
+            return;
+        }
+
+        $found = false;
+        foreach ($users as &$u) {
+            if (($u['id'] ?? '') === $userId) {
+                $u['passwordHash'] = $hash;
+                $u['salt']         = $salt;
+                $u['iterations']   = $iterations;
+                $u['isFirstLogin'] = true;
+                $found = true;
+                break;
+            }
+        }
+        unset($u);
+
+        if (!$found) {
+            http_response_code(404);
+            echo json_encode(['error' => 'User not found']);
+            return;
+        }
+
+        writeJson('users', $users);
+        echo json_encode(['success' => true]);
     }
 
     $filtered = array_values(array_filter($users, fn($u) => $u['id'] !== $userId));
@@ -557,6 +602,8 @@ function buildUserRecord(array $body, string $role, bool $isFirstLogin): array
         'preferences'    => ['theme' => 'dark-classic'],
         'isFirstLogin'   => $isFirstLogin,
         'isActive'       => true,
+        'hasPaid'        => false,
+        'paidAt'         => null,
         'createdAt'      => date('c'),
         'securityAnswer' => isset($body['securityAnswer'])
             ? hash('sha256', $body['securityAnswer'])

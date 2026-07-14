@@ -37,6 +37,7 @@ const Admin = (() => {
 
         // Count players (role === 'player')
         const playerCount  = users.filter(u => u.role === 'player').length;
+        const paidPlayers  = users.filter(u => u.role === 'player' && u.hasPaid).length;
         const pendingPicks = picks.filter(p => p.result === null).length;
         const totalPicks   = picks.length;
 
@@ -62,12 +63,12 @@ const Admin = (() => {
                         <div class="stat-label">Pool Total</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">${totalPicks}</div>
-                        <div class="stat-label">Total Picks</div>
+                        <div class="stat-value">${paidPlayers}/${playerCount}</div>
+                        <div class="stat-label">Paid Players</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">${pendingPicks}</div>
-                        <div class="stat-label">Pending Scores</div>
+                        <div class="stat-value">$${(paidPlayers * (settings.buyIn || 0)).toFixed(0)}</div>
+                        <div class="stat-label">Collected</div>
                     </div>
                 </div>
 
@@ -86,8 +87,15 @@ const Admin = (() => {
                             <button class="admin-action-btn" id="btn-add-user">
                                 <span class="action-icon">➕</span>
                                 <div>
-                                    <div class="action-title">Add Player</div>
-                                    <div class="action-desc">Create a new player account</div>
+                                    <div class="action-title">Invite User</div>
+                                    <div class="action-desc">Create a user and issue a temporary password</div>
+                                </div>
+                            </button>
+                            <button class="admin-action-btn" id="btn-reset-user-password">
+                                <span class="action-icon">🔑</span>
+                                <div>
+                                    <div class="action-title">Reset User Password</div>
+                                    <div class="action-desc">Force password reset on next login</div>
                                 </div>
                             </button>
                             <button class="admin-action-btn" id="btn-score-game">
@@ -119,6 +127,8 @@ const Admin = (() => {
                                 <p>🗓️ Season: <strong>${settings.seasonYear || '—'}</strong></p>
                                 <p class="mt-2">📦 Games in database: <strong>${games.length}</strong></p>
                                 <p class="mt-2">📝 Picks recorded: <strong>${totalPicks}</strong></p>
+                                <p class="mt-2">⏳ Pending picks: <strong>${pendingPicks}</strong></p>
+                                <p class="mt-2">💳 Players paid: <strong>${paidPlayers}</strong></p>
                             </div>
                             <div id="sync-alert"></div>
                         </div>
@@ -129,7 +139,7 @@ const Admin = (() => {
                 <div class="card mt-4" style="margin-top:1.5rem;">
                     <div class="card-header">
                         <h3>👥 User Management</h3>
-                        <button class="btn btn-primary btn-sm" id="btn-add-user-2">+ Add Player</button>
+                        <button class="btn btn-primary btn-sm" id="btn-add-user-2">+ Invite User</button>
                     </div>
                     <div class="table-wrapper">
                         ${buildUserTable(users)}
@@ -155,6 +165,7 @@ const Admin = (() => {
         });
         document.getElementById('btn-add-user').addEventListener('click',   () => showAddUserModal());
         document.getElementById('btn-add-user-2').addEventListener('click', () => showAddUserModal());
+        document.getElementById('btn-reset-user-password').addEventListener('click', () => showAdminResetPasswordModal());
         document.getElementById('btn-score-game').addEventListener('click', () => showScoreModal());
         document.getElementById('btn-pool-settings').addEventListener('click', () => showSettingsModal());
 
@@ -163,9 +174,13 @@ const Admin = (() => {
             const editBtn   = e.target.closest('.btn-edit-user');
             const deleteBtn = e.target.closest('.btn-delete-user');
             const toggleBtn = e.target.closest('.btn-toggle-user');
+            const paidBtn   = e.target.closest('.btn-paid-user');
+            const resetBtn  = e.target.closest('.btn-reset-password-user');
             if (editBtn)   showEditUserModal(editBtn.dataset.userId);
             if (deleteBtn) confirmDeleteUser(deleteBtn.dataset.userId, deleteBtn.dataset.username);
             if (toggleBtn) toggleUserActive(toggleBtn.dataset.userId, toggleBtn.dataset.active === 'true');
+            if (paidBtn)   toggleUserPaid(paidBtn.dataset.userId, paidBtn.dataset.paid === 'true');
+            if (resetBtn)  showAdminResetPasswordModal(resetBtn.dataset.userId);
         });
     }
 
@@ -186,20 +201,32 @@ const Admin = (() => {
                 <td>${u.isActive
                     ? '<span class="badge badge-success">Active</span>'
                     : '<span class="badge badge-danger">Inactive</span>'}</td>
+                <td>${u.isFirstLogin
+                    ? '<span class="badge">Password Reset Required</span>'
+                    : '<span class="badge badge-success">Ready</span>'}</td>
+                <td>${u.hasPaid
+                    ? `<span class="badge badge-success">Paid${u.paidAt ? ` · ${escHtml(new Date(u.paidAt).toLocaleDateString())}` : ''}</span>`
+                    : '<span class="badge badge-warning">Unpaid</span>'}</td>
                 <td style="text-align:right;white-space:nowrap;">
                     <button class="btn btn-ghost btn-sm btn-edit-user" data-user-id="${u.id}" title="Edit">✏️</button>
+                    <button class="btn btn-ghost btn-sm btn-reset-password-user" data-user-id="${u.id}" title="Reset Password">🔑</button>
                     <button class="btn btn-ghost btn-sm btn-toggle-user"
                         data-user-id="${u.id}" data-active="${u.isActive}"
                         title="${u.isActive ? 'Deactivate' : 'Activate'}">
                         ${u.isActive ? '🔒' : '🔓'}
                     </button>
+                    ${u.role === 'player' ? `<button class="btn btn-ghost btn-sm btn-paid-user"
+                        data-user-id="${u.id}" data-paid="${u.hasPaid ? 'true' : 'false'}"
+                        title="${u.hasPaid ? 'Mark unpaid' : 'Mark paid'}">
+                        ${u.hasPaid ? '💸' : '💳'}
+                    </button>` : ''}
                     ${u.role !== 'admin' ? `<button class="btn btn-ghost btn-sm btn-delete-user"
                         data-user-id="${u.id}" data-username="${escHtml(u.username)}" title="Delete">🗑️</button>` : ''}
                 </td>
             </tr>
         `).join('');
         return `<table>
-            <thead><tr><th>Username</th><th>Role</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
+            <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Login State</th><th>Payment</th><th style="text-align:right;">Actions</th></tr></thead>
             <tbody>${rows}</tbody>
         </table>`;
     }
@@ -238,7 +265,7 @@ const Admin = (() => {
     // Modal: Add User
     // -------------------------------------------------------
     function showAddUserModal() {
-        App.ui.showModal('Add Player', `
+        App.ui.showModal('Invite User', `
             <div id="add-user-alert"></div>
             <form id="add-user-form">
                 <div class="form-group">
@@ -263,7 +290,7 @@ const Admin = (() => {
                 </div>
                 <div class="modal-footer" style="padding:0;border:none;margin-top:1rem;">
                     <button type="button" class="btn btn-ghost" onclick="App.ui.closeModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="au-submit">Create Player</button>
+                    <button type="submit" class="btn btn-primary" id="au-submit">Invite User</button>
                 </div>
             </form>
         `);
@@ -278,8 +305,8 @@ const Admin = (() => {
             const role     = document.getElementById('au-role').value;
 
             alertEl.innerHTML = '';
-            if (password.length < 6) {
-                alertEl.innerHTML = App.ui.alertHTML('Password must be at least 6 characters.', 'danger');
+            if (password.length < 8) {
+                alertEl.innerHTML = App.ui.alertHTML('Password must be at least 8 characters.', 'danger');
                 return;
             }
 
@@ -302,14 +329,14 @@ const Admin = (() => {
                     iv, salt, iterations: 100000, role,
                 });
 
-                alertEl.innerHTML = App.ui.alertHTML(`Player "${username}" created!`, 'success');
+                alertEl.innerHTML = App.ui.alertHTML(`Invite created for "${username}".`, 'success');
                 // Refresh user list
                 App.state.data.users = await App.api.get('get_users');
                 setTimeout(() => { App.ui.closeModal(); renderAdmin(); }, 1200);
             } catch (err) {
                 alertEl.innerHTML = App.ui.alertHTML(err.message || 'Failed to create user.', 'danger');
                 btn.disabled = false;
-                btn.textContent = 'Create Player';
+                btn.textContent = 'Invite User';
             }
         });
     }
@@ -399,6 +426,86 @@ const Admin = (() => {
         } catch (err) {
             App.ui.toast(err.message, 'danger');
         }
+    }
+
+    async function toggleUserPaid(userId, currentlyPaid) {
+        try {
+            await App.api.post('update_user', { id: userId, hasPaid: !currentlyPaid });
+            App.state.data.users = await App.api.get('get_users');
+            renderAdmin();
+        } catch (err) {
+            App.ui.toast(err.message, 'danger');
+        }
+    }
+
+    function showAdminResetPasswordModal(initialUserId = null) {
+        const users = App.state.data.users.filter(u => u.isActive);
+        if (users.length === 0) {
+            App.ui.showModal('Reset User Password', `
+                <p class="text-secondary">No active users found.</p>
+                <div class="modal-footer" style="padding:0;border:none;margin-top:1rem;">
+                    <button class="btn btn-ghost" onclick="App.ui.closeModal()">Close</button>
+                </div>
+            `);
+            return;
+        }
+
+        const options = users.map(u => `
+            <option value="${u.id}" ${u.id === initialUserId ? 'selected' : ''}>
+                ${escHtml(u.username)} (${escHtml(u.role)})
+            </option>
+        `).join('');
+
+        App.ui.showModal('Reset User Password', `
+            <div id="arp-alert"></div>
+            <div class="form-group">
+                <label class="form-label">User</label>
+                <select id="arp-user" class="form-select">${options}</select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Temporary Password</label>
+                <input id="arp-password" type="password" class="form-input" placeholder="Minimum 8 characters" required>
+                <p class="form-hint">User will be forced to set a new password at next login.</p>
+            </div>
+            <div class="modal-footer" style="padding:0;border:none;margin-top:1rem;">
+                <button class="btn btn-ghost" onclick="App.ui.closeModal()">Cancel</button>
+                <button class="btn btn-primary" id="arp-submit">Reset Password</button>
+            </div>
+        `);
+
+        document.getElementById('arp-submit').addEventListener('click', async () => {
+            const alertEl = document.getElementById('arp-alert');
+            const btn = document.getElementById('arp-submit');
+            const userId = document.getElementById('arp-user').value;
+            const password = document.getElementById('arp-password').value;
+
+            alertEl.innerHTML = '';
+            if (password.length < 8) {
+                alertEl.innerHTML = App.ui.alertHTML('Temporary password must be at least 8 characters.', 'danger');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Resetting…';
+            try {
+                const salt = App.crypto.generateSalt();
+                const key = await App.crypto.deriveKey(password, salt);
+                const pHash = await App.crypto.hashForAuth(key);
+                await App.api.post('admin_reset_password', {
+                    id: userId,
+                    passwordHash: pHash,
+                    salt,
+                    iterations: 100000,
+                });
+                App.state.data.users = await App.api.get('get_users');
+                alertEl.innerHTML = App.ui.alertHTML('Password reset. User must set a new password on next login.', 'success');
+                setTimeout(() => { App.ui.closeModal(); renderAdmin(); }, 900);
+            } catch (err) {
+                alertEl.innerHTML = App.ui.alertHTML(err.message || 'Password reset failed.', 'danger');
+                btn.disabled = false;
+                btn.textContent = 'Reset Password';
+            }
+        });
     }
 
     // -------------------------------------------------------
@@ -564,6 +671,7 @@ const Admin = (() => {
         renderAdmin,
         setSyncStatus,
         showAddUserModal,
+        showAdminResetPasswordModal,
         promptScoreGame,
         showSettingsModal,
     };
