@@ -208,7 +208,7 @@ const Admin = (() => {
                     ? '<span class="badge badge-success">Active</span>'
                     : '<span class="badge badge-danger">Inactive</span>'}</td>
                 <td>${(u.isFirstLogin ?? false)
-                    ? '<span class="badge">First Login Pending</span>'
+                    ? '<span class="badge">Password Change Required</span>'
                     : '<span class="badge badge-success">Ready</span>'}</td>
                 <td>${paymentBadgeHtml(u)}</td>
                 <td style="text-align:right;white-space:nowrap;">
@@ -220,10 +220,10 @@ const Admin = (() => {
                         ${u.isActive ? '🔒' : '🔓'}
                     </button>
                     ${u.role === 'player' ? `<button class="btn btn-ghost btn-sm btn-paid-user"
-                        data-user-id="${u.id}" data-paid="${u.hasPaid ? 'true' : 'false'}"
-                        title="${u.hasPaid ? 'Mark unpaid' : 'Mark paid'}"
-                        aria-label="${u.hasPaid ? 'Mark unpaid' : 'Mark paid'}">
-                        ${u.hasPaid ? '💸' : '💳'}
+                        data-user-id="${u.id}" data-paid="${(u.hasPaid ?? false) ? 'true' : 'false'}"
+                        title="${(u.hasPaid ?? false) ? 'Mark unpaid' : 'Mark paid'}"
+                        aria-label="${(u.hasPaid ?? false) ? 'Mark unpaid' : 'Mark paid'}">
+                        ${(u.hasPaid ?? false) ? '💸' : '💳'}
                     </button>` : ''}
                     ${u.role !== 'admin' ? `<button class="btn btn-ghost btn-sm btn-delete-user"
                         data-user-id="${u.id}" data-username="${escHtml(u.username)}" title="Delete">🗑️</button>` : ''}

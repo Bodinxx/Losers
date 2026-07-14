@@ -332,7 +332,7 @@ function handleUpdateUser(array $body): void
                 $wasPaid      = (bool) ($u['hasPaid'] ?? false);
                 $u['hasPaid'] = (bool) $body['hasPaid'];
                 if ($u['hasPaid']) {
-                    if (!$wasPaid || (($u['paidAt'] ?? null) === null)) {
+                    if (!$wasPaid) {
                         $u['paidAt'] = date('c');
                     }
                 } else {
