@@ -415,9 +415,9 @@ function handleDeleteUser(array $body): void
         $salt       = $body['salt'] ?? '';
         $iterations = (int) ($body['iterations'] ?? 100000);
 
-        if ($userId === '' || $hash === '' || $salt === '' || $iterations < 10000) {
+        if ($userId === '' || $hash === '' || $salt === '' || $iterations < 100000) {
             http_response_code(400);
-            echo json_encode(['error' => 'id, passwordHash, and salt required; iterations must be at least 10000']);
+            echo json_encode(['error' => 'id, passwordHash, and salt required; iterations must be at least 100000']);
             return;
         }
 

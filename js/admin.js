@@ -13,6 +13,12 @@
 'use strict';
 
 const Admin = (() => {
+    const CURRENCY_FORMATTER = new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
 
     // -------------------------------------------------------
     // Sync status indicator (shown in admin panel)
@@ -37,7 +43,7 @@ const Admin = (() => {
 
         // Count players (role === 'player')
         const playerCount  = users.filter(u => u.role === 'player').length;
-        const paidPlayers  = users.filter(u => u.role === 'player' && u.hasPaid).length;
+        const paidPlayers  = users.filter(u => u.role === 'player' && (u.hasPaid ?? false) === true).length;
         const pendingPicks = picks.filter(p => p.result === null).length;
         const totalPicks   = picks.length;
 
@@ -201,7 +207,7 @@ const Admin = (() => {
                 <td>${u.isActive
                     ? '<span class="badge badge-success">Active</span>'
                     : '<span class="badge badge-danger">Inactive</span>'}</td>
-                <td>${u.isFirstLogin
+                <td>${(u.isFirstLogin ?? false)
                     ? '<span class="badge">First Login Pending</span>'
                     : '<span class="badge badge-success">Ready</span>'}</td>
                 <td>${paymentBadgeHtml(u)}</td>
@@ -668,18 +674,13 @@ const Admin = (() => {
 
     function paymentBadgeHtml(user) {
         if (user.role !== 'player') return '<span class="badge">N/A</span>';
-        if (!user.hasPaid) return '<span class="badge badge-warning">Unpaid</span>';
+        if ((user.hasPaid ?? false) !== true) return '<span class="badge badge-warning">Unpaid</span>';
         const paidDate = user.paidAt ? ` · ${escHtml(new Date(user.paidAt).toLocaleDateString())}` : '';
         return `<span class="badge badge-success">Paid${paidDate}</span>`;
     }
 
     function formatCurrency(amount) {
-        return new Intl.NumberFormat(undefined, {
-            style: 'currency',
-            currency: 'USD',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(Number(amount || 0));
+        return CURRENCY_FORMATTER.format(Number(amount || 0));
     }
 
     return {
