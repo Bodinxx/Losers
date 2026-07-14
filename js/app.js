@@ -266,7 +266,7 @@ const App = (() => {
                 case 'leaderboard': renderLeaderboard(); break;
                 case 'profile':     renderProfile();     break;
                 case 'admin':
-                    if (state.currentUser?.role === 'admin') Admin.renderAdmin();
+                    if (isAdmin(state.currentUser)) Admin.renderAdmin();
                     break;
             }
         },
@@ -431,6 +431,7 @@ const App = (() => {
 
                 const loginRes = await api.post('login', { username, passwordHash: pHash });
                 const user     = loginRes.user;
+                user.role      = normalizeRole(user.role) || 'player';
 
                 // Store session
                 state.currentUser = user;
@@ -922,6 +923,7 @@ const App = (() => {
                             </div>
                             <hr class="divider">
                             <button class="btn btn-secondary btn-block" id="btn-change-password">🔑 Change Password</button>
+                            <button class="btn btn-ghost btn-block" id="btn-update-security" style="margin-top:.75rem;">🛡️ Update Security Q&amp;A</button>
                         </div>
                     </div>
 
@@ -941,6 +943,7 @@ const App = (() => {
         themes.renderSelector(document.getElementById('theme-selector-grid'));
 
         document.getElementById('btn-change-password').addEventListener('click', () => showChangePasswordModal());
+        document.getElementById('btn-update-security').addEventListener('click', () => showSecurityModal());
     }
 
     function showChangePasswordModal() {
@@ -1015,6 +1018,61 @@ const App = (() => {
         });
     }
 
+    function showSecurityModal() {
+        const u = state.currentUser;
+        ui.showModal('Update Security Q&A', `
+            <div id="sq-alert"></div>
+            <form id="sq-form" novalidate>
+                <div class="form-group">
+                    <label class="form-label">Security Question</label>
+                    <input id="sq-question" type="text" class="form-input"
+                           placeholder="e.g. What city were you born in?"
+                           value="${escHtml(u.securityQuestion || '')}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Security Answer</label>
+                    <input id="sq-answer" type="text" class="form-input"
+                           placeholder="Your answer" autocomplete="off" required>
+                </div>
+                <p class="form-hint">This is used for account recovery.</p>
+                <div class="modal-footer" style="padding:0;border:none;margin-top:1rem;">
+                    <button type="button" class="btn btn-ghost" onclick="App.ui.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="sq-btn">Save</button>
+                </div>
+            </form>
+        `);
+
+        document.getElementById('sq-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            const alertEl  = document.getElementById('sq-alert');
+            const btn      = document.getElementById('sq-btn');
+            const question = document.getElementById('sq-question').value.trim();
+            const answer   = document.getElementById('sq-answer').value.trim();
+
+            alertEl.innerHTML = '';
+            if (question.length < 5) { alertEl.innerHTML = ui.alertHTML('Please enter a security question (5+ characters).'); return; }
+            if (answer.length < 3)   { alertEl.innerHTML = ui.alertHTML('Please enter a security answer (3+ characters).'); return; }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>';
+            try {
+                await api.post('update_security', {
+                    id: u.id,
+                    securityQuestion: question,
+                    securityAnswer: answer,
+                });
+                state.currentUser.securityQuestion = question;
+                sessionStorage.setItem('nhl_pool_user', JSON.stringify(state.currentUser));
+                ui.closeModal();
+                ui.toast('Security Q&A updated successfully!', 'success');
+            } catch (err) {
+                alertEl.innerHTML = ui.alertHTML(err.message || 'Failed to update security Q&A.');
+                btn.disabled = false;
+                btn.textContent = 'Save';
+            }
+        });
+    }
+
     // ═══════════════════════════════════════════════════
     // Auth helpers
     // ═══════════════════════════════════════════════════
@@ -1029,7 +1087,7 @@ const App = (() => {
 
         // Show/hide admin nav items
         document.querySelectorAll('.nav-admin').forEach(el => {
-            el.style.display = u.role === 'admin' ? '' : 'none';
+            el.style.display = isAdmin(u) ? 'list-item' : 'none';
         });
     }
 
@@ -1061,6 +1119,14 @@ const App = (() => {
         const d = document.createElement('div');
         d.appendChild(document.createTextNode(String(str ?? '')));
         return d.innerHTML;
+    }
+
+    function normalizeRole(role) {
+        return String(role ?? '').trim().toLowerCase();
+    }
+
+    function isAdmin(user) {
+        return normalizeRole(user?.role) === 'admin';
     }
 
     function resultBadge(result) {
@@ -1098,7 +1164,7 @@ const App = (() => {
         document.querySelectorAll('.nav-link[data-view]').forEach(link => {
             link.addEventListener('click', () => {
                 const target = link.dataset.view;
-                if (target === 'admin' && state.currentUser?.role !== 'admin') return;
+                if (target === 'admin' && !isAdmin(state.currentUser)) return;
                 router.navigate(target);
                 // Close sidebar on mobile
                 document.getElementById('app-nav')?.classList.remove('open');
@@ -1132,6 +1198,7 @@ const App = (() => {
             if (saved) {
                 try {
                     state.currentUser = JSON.parse(saved);
+                    state.currentUser.role = normalizeRole(state.currentUser.role) || 'player';
                     await loadAppData();
                     showAuthNav();
                     ui.hideLoading();

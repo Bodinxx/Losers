@@ -83,6 +83,7 @@ switch ($action) {
     case 'create_user':   handleCreateUser($body);      break;
     case 'update_user':   handleUpdateUser($body);      break;
     case 'change_password': handleChangePassword($body); break;
+    case 'update_security': handleUpdateSecurity($body); break;
     case 'admin_reset_password': handleAdminResetPassword($body); break;
     case 'delete_user':   handleDeleteUser($body);      break;
     case 'save_pick':     handleSavePick($body);        break;
@@ -283,6 +284,7 @@ function handleLogin(array $body): void
             'iv'             => $found['iv']             ?? null,
             'salt'           => $found['salt']           ?? null,
             'iterations'     => $found['iterations']     ?? 100000,
+            'securityQuestion' => $found['securityQuestion'] ?? null,
         ],
     ]);
 }
@@ -381,6 +383,46 @@ function handleChangePassword(array $body): void
             if (!empty($body['securityAnswer'])) {
                 $u['securityAnswer'] = hash('sha256', $body['securityAnswer']);
             }
+            $found = true;
+            break;
+        }
+    }
+    unset($u);
+
+    if (!$found) {
+        http_response_code(404);
+        echo json_encode(['error' => 'User not found']);
+        return;
+    }
+
+    writeJson('users', $users);
+    echo json_encode(['success' => true]);
+}
+
+function handleUpdateSecurity(array $body): void
+{
+    $users            = ensureFile('users', []);
+    $userId           = $body['id'] ?? '';
+    $securityQuestion = trim((string)($body['securityQuestion'] ?? ''));
+    $securityAnswer   = trim((string)($body['securityAnswer'] ?? ''));
+
+    if ($userId === '' || $securityQuestion === '' || $securityAnswer === '') {
+        http_response_code(400);
+        echo json_encode(['error' => 'id, securityQuestion, and securityAnswer required']);
+        return;
+    }
+
+    if (mb_strlen($securityQuestion) < 5 || mb_strlen($securityAnswer) < 3) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Security question/answer too short']);
+        return;
+    }
+
+    $found = false;
+    foreach ($users as &$u) {
+        if (($u['id'] ?? '') === $userId) {
+            $u['securityQuestion'] = htmlspecialchars($securityQuestion, ENT_QUOTES, 'UTF-8');
+            $u['securityAnswer']   = hash('sha256', $securityAnswer);
             $found = true;
             break;
         }
@@ -612,6 +654,9 @@ function buildUserRecord(array $body, string $role, bool $isFirstLogin): array
         'hasPaid'        => false,
         'paidAt'         => null,
         'createdAt'      => date('c'),
+        'securityQuestion' => isset($body['securityQuestion'])
+            ? htmlspecialchars(trim((string) $body['securityQuestion']), ENT_QUOTES, 'UTF-8')
+            : null,
         'securityAnswer' => isset($body['securityAnswer'])
             ? hash('sha256', $body['securityAnswer'])
             : null,
