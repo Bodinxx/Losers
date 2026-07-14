@@ -901,6 +901,9 @@ const App = (() => {
     function renderProfile() {
         const u = state.currentUser;
         const container = document.getElementById('view-profile');
+        const safeUsername = escHtml(u.username || '');
+        const safeRole     = escHtml(u.role || '');
+        const safeInitial  = escHtml((u.username || '').charAt(0).toUpperCase());
         container.innerHTML = `
             <div class="app-content">
                 <div class="page-header">
@@ -914,11 +917,11 @@ const App = (() => {
                         <div class="card-body">
                             <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;">
                                 <div class="user-avatar" style="width:3.5rem;height:3.5rem;font-size:1.5rem;">
-                                    ${u.username.charAt(0).toUpperCase()}
+                                    ${safeInitial}
                                 </div>
                                 <div>
-                                    <div class="font-bold" style="font-size:1.1rem;">${escHtml(u.username)}</div>
-                                    <div class="badge ${u.role === 'admin' ? 'badge-warning' : ''}">${u.role}</div>
+                                    <div class="font-bold" style="font-size:1.1rem;">${safeUsername}</div>
+                                    <div class="badge ${isAdmin(u) ? 'badge-warning' : ''}">${safeRole}</div>
                                 </div>
                             </div>
                             <hr class="divider">
