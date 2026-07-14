@@ -59,7 +59,7 @@ const Admin = (() => {
                         <div class="stat-label">Players</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">$${(playerCount * (settings.buyIn || 0)).toFixed(0)}</div>
+                        <div class="stat-value">${formatCurrency(playerCount * (settings.buyIn || 0))}</div>
                         <div class="stat-label">Pool Total</div>
                     </div>
                     <div class="stat-card">
@@ -67,7 +67,7 @@ const Admin = (() => {
                         <div class="stat-label">Paid Players</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">$${(paidPlayers * (settings.buyIn || 0)).toFixed(0)}</div>
+                        <div class="stat-value">${formatCurrency(paidPlayers * (settings.buyIn || 0))}</div>
                         <div class="stat-label">Collected</div>
                     </div>
                 </div>
@@ -204,9 +204,7 @@ const Admin = (() => {
                 <td>${u.isFirstLogin
                     ? '<span class="badge">Password Reset Required</span>'
                     : '<span class="badge badge-success">Ready</span>'}</td>
-                <td>${u.hasPaid
-                    ? `<span class="badge badge-success">Paid${u.paidAt ? ` · ${escHtml(new Date(u.paidAt).toLocaleDateString())}` : ''}</span>`
-                    : '<span class="badge badge-warning">Unpaid</span>'}</td>
+                <td>${paymentBadgeHtml(u)}</td>
                 <td style="text-align:right;white-space:nowrap;">
                     <button class="btn btn-ghost btn-sm btn-edit-user" data-user-id="${u.id}" title="Edit">✏️</button>
                     <button class="btn btn-ghost btn-sm btn-reset-password-user" data-user-id="${u.id}" title="Reset Password">🔑</button>
@@ -665,6 +663,16 @@ const Admin = (() => {
         const div = document.createElement('div');
         div.appendChild(document.createTextNode(String(str)));
         return div.innerHTML;
+    }
+
+    function paymentBadgeHtml(user) {
+        if (!user.hasPaid) return '<span class="badge badge-warning">Unpaid</span>';
+        const paidDate = user.paidAt ? ` · ${escHtml(new Date(user.paidAt).toLocaleDateString())}` : '';
+        return `<span class="badge badge-success">Paid${paidDate}</span>`;
+    }
+
+    function formatCurrency(amount) {
+        return `$${Number(amount || 0).toFixed(2)}`;
     }
 
     return {

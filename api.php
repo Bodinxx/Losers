@@ -330,7 +330,7 @@ function handleUpdateUser(array $body): void
             if (array_key_exists('isActive', $body))    $u['isActive']    = (bool) $body['isActive'];
             if (array_key_exists('hasPaid', $body)) {
                 $u['hasPaid'] = (bool) $body['hasPaid'];
-                $u['paidAt']  = $u['hasPaid'] ? ($u['paidAt'] ?? date('c')) : null;
+                $u['paidAt']  = $u['hasPaid'] ? date('c') : null;
             }
             if (array_key_exists('role', $body) && in_array($body['role'], ['admin','player'], true)) {
                 $u['role'] = $body['role'];
