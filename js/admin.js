@@ -60,10 +60,10 @@ const Admin = (() => {
                     </div>
                     <div class="stat-card">
                         <div class="stat-value">${formatCurrency(playerCount * (settings.buyIn || 0))}</div>
-                        <div class="stat-label">Expected Total</div>
+                        <div class="stat-label">Expected Revenue</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value">${paidPlayers}/${playerCount}</div>
+                        <div class="stat-value">${playerCount === 0 ? '0' : `${paidPlayers}/${playerCount}`}</div>
                         <div class="stat-label">Paid Players</div>
                     </div>
                     <div class="stat-card">
@@ -202,7 +202,7 @@ const Admin = (() => {
                     ? '<span class="badge badge-success">Active</span>'
                     : '<span class="badge badge-danger">Inactive</span>'}</td>
                 <td>${u.isFirstLogin
-                    ? '<span class="badge">Password Reset Required</span>'
+                    ? '<span class="badge">First Login Pending</span>'
                     : '<span class="badge badge-success">Ready</span>'}</td>
                 <td>${paymentBadgeHtml(u)}</td>
                 <td style="text-align:right;white-space:nowrap;">
@@ -215,7 +215,8 @@ const Admin = (() => {
                     </button>
                     ${u.role === 'player' ? `<button class="btn btn-ghost btn-sm btn-paid-user"
                         data-user-id="${u.id}" data-paid="${u.hasPaid ? 'true' : 'false'}"
-                        title="${u.hasPaid ? 'Mark unpaid' : 'Mark paid'}">
+                        title="${u.hasPaid ? 'Mark unpaid' : 'Mark paid'}"
+                        aria-label="${u.hasPaid ? 'Mark unpaid' : 'Mark paid'}">
                         ${u.hasPaid ? '💸' : '💳'}
                     </button>` : ''}
                     ${u.role !== 'admin' ? `<button class="btn btn-ghost btn-sm btn-delete-user"
@@ -673,7 +674,12 @@ const Admin = (() => {
     }
 
     function formatCurrency(amount) {
-        return `$${Number(amount || 0).toFixed(2)}`;
+        return new Intl.NumberFormat(undefined, {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(Number(amount || 0));
     }
 
     return {

@@ -332,7 +332,7 @@ function handleUpdateUser(array $body): void
                 $wasPaid      = (bool) ($u['hasPaid'] ?? false);
                 $u['hasPaid'] = (bool) $body['hasPaid'];
                 if ($u['hasPaid']) {
-                    if (!$wasPaid || empty($u['paidAt'])) {
+                    if (!$wasPaid || (($u['paidAt'] ?? null) === null)) {
                         $u['paidAt'] = date('c');
                     }
                 } else {
@@ -417,7 +417,7 @@ function handleDeleteUser(array $body): void
 
         if ($userId === '' || $hash === '' || $salt === '' || $iterations < 10000) {
             http_response_code(400);
-            echo json_encode(['error' => 'id, passwordHash, salt, and valid iterations required']);
+            echo json_encode(['error' => 'id, passwordHash, and salt required; iterations must be at least 10000']);
             return;
         }
 
