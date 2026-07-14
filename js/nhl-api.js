@@ -28,6 +28,8 @@ const NHLApi = (() => {
         }
     }
 
+    const MS_PER_HOUR = 60 * 60 * 1000;
+
     // -------------------------------------------------------
     // Sync decision logic
     // -------------------------------------------------------
@@ -36,14 +38,12 @@ const NHLApi = (() => {
         const dayOfWeek    = now.getDay(); // 0=Sun,6=Sat
         const isWeekend    = dayOfWeek === 0 || dayOfWeek === 6;
         const lastSync     = settings.lastSyncDate ? new Date(settings.lastSyncDate) : null;
-        const hoursSinceSyncRaw = lastSync ? (now - lastSync) / 36e5 : Infinity;
+        const hoursSinceSync = lastSync ? (now - lastSync) / MS_PER_HOUR : Infinity;
 
-        if (!lastSync) return true;                                       // Never synced
-        if (isWeekend && hoursSinceSyncRaw > SYNC_INTERVAL_HOURS) return true; // Weekend re-sync
+        if (!lastSync) return true;                                          // Never synced
+        if (isWeekend && hoursSinceSync > SYNC_INTERVAL_HOURS) return true; // Weekend re-sync
         // Sync if we haven't synced today (new calendar day)
-        const todayStr     = now.toDateString();
-        const lastSyncStr  = lastSync.toDateString();
-        if (todayStr !== lastSyncStr) return true;
+        if (now.toDateString() !== lastSync.toDateString()) return true;
 
         return false;
     }
@@ -249,14 +249,14 @@ const NHLApi = (() => {
         return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    // Derive the current pool "weekendId" (YYYY-WW-Sat format)
+    // Derive the current pool "weekendId" (YYYY-MM-DD of the Saturday)
     function getCurrentWeekendId() {
-        const now  = new Date();
-        const day  = now.getDay(); // 0=Sun,6=Sat
+        const now = new Date();
+        const day = now.getDay(); // 0=Sun, 6=Sat
         // Find the Saturday of the current or upcoming weekend
-        let sat    = new Date(now);
-        if (day === 0) sat.setDate(now.getDate() - 1);   // Sunday → back to Saturday
-        else if (day !== 6) sat.setDate(now.getDate() + (6 - day)); // Weekday → next Saturday
+        const sat = new Date(now);
+        if (day === 0) sat.setDate(sat.getDate() - 1);        // Sunday → back to Saturday
+        else if (day !== 6) sat.setDate(sat.getDate() + (6 - day)); // Weekday → next Saturday
         const yyyy = sat.getFullYear();
         const mm   = String(sat.getMonth() + 1).padStart(2, '0');
         const dd   = String(sat.getDate()).padStart(2, '0');

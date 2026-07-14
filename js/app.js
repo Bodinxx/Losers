@@ -461,7 +461,6 @@ const App = (() => {
         });
     }
 
-    // Fetch just the salt/iterations for a given username so we can derive the key
     // Fetch just the PBKDF2 salt/iterations for a username so we can derive the key before login.
     // The server's get_user_salt endpoint exposes only non-secret derivation parameters.
     async function fetchSaltForUser(username) {
@@ -1076,11 +1075,15 @@ const App = (() => {
     }
 
     function isPickingLocked() {
-        // Picks lock at Friday 00:00 MST and stay locked through Sunday
+        // Picks lock at Friday 00:00 MST and stay locked through Sunday.
+        // Use Intl.DateTimeFormat parts to reliably read the day in MST/MDT.
         try {
-            const mst = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Denver' }));
-            const day = mst.getDay(); // 0=Sun, 5=Fri, 6=Sat
-            return day === 5 || day === 6 || day === 0;
+            const parts = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/Denver',
+                weekday: 'short',
+            }).formatToParts(new Date());
+            const weekday = parts.find(p => p.type === 'weekday')?.value;
+            return weekday === 'Fri' || weekday === 'Sat' || weekday === 'Sun';
         } catch { return false; }
     }
 
