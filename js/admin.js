@@ -219,12 +219,17 @@ const Admin = (() => {
                         title="${u.isActive ? 'Deactivate' : 'Activate'}">
                         ${u.isActive ? '🔒' : '🔓'}
                     </button>
-                    ${u.role === 'player' ? `<button class="btn btn-ghost btn-sm btn-paid-user"
+                    ${u.role !== 'admin' ? `<button class="btn btn-ghost btn-sm btn-paid-user"
                         data-user-id="${u.id}" data-paid="${(u.hasPaid ?? false) ? 'true' : 'false'}"
                         title="${(u.hasPaid ?? false) ? 'Mark unpaid' : 'Mark paid'}"
                         aria-label="${(u.hasPaid ?? false) ? 'Mark unpaid' : 'Mark paid'}">
                         ${(u.hasPaid ?? false) ? '💸' : '💳'}
-                    </button>` : ''}
+                    </button>` : `<button class="btn btn-ghost btn-sm btn-paid-user"
+                        data-user-id="${u.id}" data-paid="${(u.hasPaid ?? false) ? 'true' : 'false'}"
+                        title="${(u.hasPaid ?? false) ? 'Mark admin unpaid' : 'Mark admin paid'}"
+                        aria-label="${(u.hasPaid ?? false) ? 'Mark admin unpaid' : 'Mark admin paid'}">
+                        ${(u.hasPaid ?? false) ? '💸' : '💳'}
+                    </button>`}
                     ${u.role !== 'admin' ? `<button class="btn btn-ghost btn-sm btn-delete-user"
                         data-user-id="${u.id}" data-username="${escHtml(u.username)}" title="Delete">🗑️</button>` : ''}
                 </td>
@@ -278,13 +283,9 @@ const Admin = (() => {
                     <input type="text" id="au-username" class="form-input" placeholder="e.g. hockeyFan99" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Temporary Password</label>
-                    <input type="password" id="au-password" class="form-input" placeholder="Temporary password" required>
-                    <p class="form-hint">Player must change this on first login.</p>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Email (optional)</label>
-                    <input type="email" id="au-email" class="form-input" placeholder="player@example.com">
+                    <label class="form-label">Email Address <span style="color:var(--danger);">*</span></label>
+                    <input type="email" id="au-email" class="form-input" placeholder="player@example.com" required>
+                    <p class="form-hint">A temporary password will be auto-generated and emailed to this address.</p>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Role</label>
@@ -295,7 +296,7 @@ const Admin = (() => {
                 </div>
                 <div class="modal-footer" style="padding:0;border:none;margin-top:1rem;">
                     <button type="button" class="btn btn-ghost" onclick="App.ui.closeModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="au-submit">Invite User</button>
+                    <button type="submit" class="btn btn-primary" id="au-submit">Send Invite</button>
                 </div>
             </form>
         `);
@@ -305,43 +306,39 @@ const Admin = (() => {
             const btn      = document.getElementById('au-submit');
             const alertEl  = document.getElementById('add-user-alert');
             const username = document.getElementById('au-username').value.trim();
-            const password = document.getElementById('au-password').value;
             const email    = document.getElementById('au-email').value.trim();
             const role     = document.getElementById('au-role').value;
 
             alertEl.innerHTML = '';
-            if (password.length < 8) {
-                alertEl.innerHTML = App.ui.alertHTML('Password must be at least 8 characters.', 'danger');
+            if (!email) {
+                alertEl.innerHTML = App.ui.alertHTML('Email address is required to send the invite.', 'danger');
                 return;
             }
 
-            btn.disabled    = true;
-            btn.innerHTML   = '<span class="spinner"></span> Creating…';
+            btn.disabled  = true;
+            btn.innerHTML = '<span class="spinner"></span> Sending…';
 
             try {
-                const salt   = App.crypto.generateSalt();
-                const key    = await App.crypto.deriveKey(password, salt);
-                const pHash  = await App.crypto.hashForAuth(key);
-                let encEmail = '', iv = '';
-                if (email) {
-                    const enc = await App.crypto.encryptEmail(email, key);
-                    encEmail  = enc.encrypted;
-                    iv        = enc.iv;
-                }
+                const res = await App.api.post('send_invite', { username, email, role });
 
-                const res = await App.api.post('create_user', {
-                    username, passwordHash: pHash, encryptedEmail: encEmail,
-                    iv, salt, iterations: 100000, role,
-                });
+                const sentNote = res.emailSent
+                    ? `An invite email has been sent to <strong>${escHtml(email)}</strong>.`
+                    : `Email delivery may have failed. Please share the temporary password manually:`;
 
-                alertEl.innerHTML = App.ui.alertHTML(`Invite created for "${username}".`, 'success');
+                alertEl.innerHTML = App.ui.alertHTML(
+                    `Invite created for "<strong>${escHtml(username)}</strong>".<br>${sentNote}` +
+                    (!res.emailSent ? `<br><code style="font-size:.9rem;user-select:all;">${escHtml(res.tempPassword)}</code>` : '') +
+                    `<br><small style="display:block;margin-top:.4rem;color:var(--text-secondary);">Temporary password: <code>${escHtml(res.tempPassword)}</code></small>`,
+                    'success'
+                );
+
                 // Refresh user list
                 App.state.data.users = await App.api.get('get_users');
-                setTimeout(() => { App.ui.closeModal(); renderAdmin(); }, 1200);
+                setTimeout(() => { App.ui.closeModal(); renderAdmin(); }, 3000);
             } catch (err) {
                 alertEl.innerHTML = App.ui.alertHTML(err.message || 'Failed to create user.', 'danger');
                 btn.disabled = false;
-                btn.textContent = 'Invite User';
+                btn.textContent = 'Send Invite';
             }
         });
     }
@@ -673,7 +670,6 @@ const Admin = (() => {
     }
 
     function paymentBadgeHtml(user) {
-        if (user.role !== 'player') return '<span class="badge">N/A</span>';
         if ((user.hasPaid ?? false) !== true) return '<span class="badge badge-warning">Unpaid</span>';
         const paidDate = user.paidAt ? ` · ${escHtml(new Date(user.paidAt).toLocaleDateString())}` : '';
         return `<span class="badge badge-success">Paid${paidDate}</span>`;
