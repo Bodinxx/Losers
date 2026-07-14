@@ -60,7 +60,7 @@ const Admin = (() => {
                     </div>
                     <div class="stat-card">
                         <div class="stat-value">${formatCurrency(playerCount * (settings.buyIn || 0))}</div>
-                        <div class="stat-label">Pool Total</div>
+                        <div class="stat-label">Expected Total</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-value">${paidPlayers}/${playerCount}</div>
@@ -666,6 +666,7 @@ const Admin = (() => {
     }
 
     function paymentBadgeHtml(user) {
+        if (user.role !== 'player') return '<span class="badge">N/A</span>';
         if (!user.hasPaid) return '<span class="badge badge-warning">Unpaid</span>';
         const paidDate = user.paidAt ? ` · ${escHtml(new Date(user.paidAt).toLocaleDateString())}` : '';
         return `<span class="badge badge-success">Paid${paidDate}</span>`;
