@@ -87,7 +87,7 @@ To make the dashboard fully responsive and immersive, `css/styles.css` relies on
   border-left: 5px solid var(--secondary-color, #e41111);
 }
 ```
-JSON
+**JSON**
 ```
 {
   "EDM": {
