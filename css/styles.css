@@ -864,3 +864,44 @@ tbody tr:hover td { background-color: var(--bg-hover); }
     .auth-card      { padding: 1.5rem; }
     .pool-banner .pool-value { font-size: 2rem; }
 }
+
+/* -------------------------------------------------
+   Toggle Switch
+   ------------------------------------------------- */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 2.75rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.toggle-slider {
+    position: absolute;
+    inset: 0;
+    background-color: var(--border-strong);
+    border-radius: 1.5rem;
+    transition: background-color 0.2s;
+}
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    height: 1.125rem;
+    width: 1.125rem;
+    left: 0.1875rem;
+    bottom: 0.1875rem;
+    background-color: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--accent);
+}
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(1.25rem);
+}

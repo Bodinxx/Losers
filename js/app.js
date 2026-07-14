@@ -264,9 +264,10 @@ const App = (() => {
                 case 'dashboard':   renderDashboard();   break;
                 case 'picks':       renderPicks();       break;
                 case 'leaderboard': renderLeaderboard(); break;
+                case 'help':        renderHelp();        break;
                 case 'profile':     renderProfile();     break;
                 case 'admin':
-                    if (state.currentUser?.role === 'admin') Admin.renderAdmin();
+                    if (isAdmin(state.currentUser)) Admin.renderAdmin();
                     break;
             }
         },
@@ -401,6 +402,9 @@ const App = (() => {
                         </div>
                         <button type="submit" class="btn btn-primary btn-block btn-lg" id="l-btn">Sign In</button>
                     </form>
+                    <div style="text-align:center;margin-top:1rem;">
+                        <button class="btn btn-ghost btn-sm" id="l-forgot">Forgot Password?</button>
+                    </div>
                 </div>
               </div>
             </div>`;
@@ -431,6 +435,7 @@ const App = (() => {
 
                 const loginRes = await api.post('login', { username, passwordHash: pHash });
                 const user     = loginRes.user;
+                user.role      = normalizeRole(user.role) || 'player';
 
                 // Store session
                 state.currentUser = user;
@@ -457,6 +462,88 @@ const App = (() => {
                 alertEl.innerHTML = ui.alertHTML(err.message || 'Sign in failed.');
                 btn.disabled = false; btn.textContent = 'Sign In';
                 ui.hideLoading();
+            }
+        });
+
+        document.getElementById('l-forgot').addEventListener('click', () => showPasswordResetFlow());
+    }
+
+    // ─────────────────────────────────────────────────
+    // Password Reset (self-service from login page)
+    // ─────────────────────────────────────────────────
+    function showPasswordResetFlow() {
+        ui.showModal('Reset Password', `
+            <p class="text-secondary" style="margin-bottom:.875rem;">
+                Enter your username and we'll look up your security question.
+            </p>
+            <div id="pr-alert"></div>
+            <div id="pr-step1">
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input id="pr-username" type="text" class="form-input" placeholder="Your username" autocomplete="username">
+                </div>
+                <div class="modal-footer" style="padding:0;border:none;margin-top:1rem;">
+                    <button class="btn btn-ghost" onclick="App.ui.closeModal()">Cancel</button>
+                    <button class="btn btn-primary" id="pr-lookup">Next</button>
+                </div>
+            </div>
+            <div id="pr-step2" style="display:none;">
+                <div class="form-group">
+                    <label class="form-label" id="pr-question-label">Security Question</label>
+                    <input id="pr-answer" type="text" class="form-input" placeholder="Your answer" autocomplete="off">
+                </div>
+                <p class="form-hint">A new temporary password will be emailed to you.</p>
+                <div class="modal-footer" style="padding:0;border:none;margin-top:1rem;">
+                    <button class="btn btn-ghost" onclick="App.ui.closeModal()">Cancel</button>
+                    <button class="btn btn-primary" id="pr-submit">Reset &amp; Email Password</button>
+                </div>
+            </div>
+        `);
+
+        document.getElementById('pr-lookup').addEventListener('click', async () => {
+            const alertEl  = document.getElementById('pr-alert');
+            const username = document.getElementById('pr-username').value.trim();
+            alertEl.innerHTML = '';
+            if (!username) { alertEl.innerHTML = ui.alertHTML('Please enter your username.'); return; }
+
+            const btn = document.getElementById('pr-lookup');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>';
+            try {
+                const data = await api.get('get_security_question', { username });
+                document.getElementById('pr-question-label').textContent = data.securityQuestion;
+                document.getElementById('pr-step1').style.display = 'none';
+                document.getElementById('pr-step2').style.display = '';
+                document.getElementById('pr-answer').focus();
+            } catch (err) {
+                alertEl.innerHTML = ui.alertHTML(err.message || 'Could not find security question.');
+                btn.disabled = false;
+                btn.textContent = 'Next';
+            }
+        });
+
+        document.getElementById('pr-submit').addEventListener('click', async () => {
+            const alertEl  = document.getElementById('pr-alert');
+            const username = document.getElementById('pr-username').value.trim();
+            const answer   = document.getElementById('pr-answer').value.trim();
+            alertEl.innerHTML = '';
+            if (!answer) { alertEl.innerHTML = ui.alertHTML('Please enter your security answer.'); return; }
+
+            const btn = document.getElementById('pr-submit');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Sending…';
+            try {
+                await api.post('reset_password', { username, securityAnswer: answer });
+                // Clear stale salt cache so the user gets the fresh salt on next login
+                localStorage.removeItem(`nhl_salt_${username.toLowerCase()}`);
+                alertEl.innerHTML = ui.alertHTML(
+                    'A new temporary password has been emailed to you. Check your inbox and log in.', 'success'
+                );
+                document.getElementById('pr-step2').style.display = 'none';
+            } catch (err) {
+                alertEl.innerHTML = ui.alertHTML(err.message || 'Password reset failed.');
+                btn.disabled = false;
+                btn.textContent = 'Reset & Email Password';
             }
         });
     }
@@ -509,14 +596,23 @@ const App = (() => {
                             <label class="form-label">Confirm Password</label>
                             <input id="fl-confirm" type="password" class="form-input" placeholder="Re-enter password" autocomplete="new-password" required>
                         </div>
+                        <hr class="divider">
                         <div class="form-group">
-                            <label class="form-label">Security Answer</label>
-                            <input id="fl-security" type="text" class="form-input" placeholder="e.g. favourite team or city" autocomplete="off" required>
-                            <p class="form-hint">Alphanumeric answer used for account recovery. Store this safely.</p>
+                            <label class="form-label">Security Question</label>
+                            <input id="fl-sq-question" type="text" class="form-input"
+                                   placeholder="e.g. What city were you born in?" autocomplete="off" required>
+                            <p class="form-hint">This question is used to verify your identity if you ever need to reset your password.</p>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Email Address (optional)</label>
-                            <input id="fl-email" type="email" class="form-input" placeholder="you@example.com" autocomplete="email">
+                            <label class="form-label">Security Answer</label>
+                            <input id="fl-security" type="text" class="form-input" placeholder="Your answer" autocomplete="off" required>
+                            <p class="form-hint">Case-insensitive. Store this safely — it is required to reset your password.</p>
+                        </div>
+                        <hr class="divider">
+                        <div class="form-group">
+                            <label class="form-label">Email Address <span style="color:var(--danger);">*</span></label>
+                            <input id="fl-email" type="email" class="form-input" placeholder="you@example.com" autocomplete="email" required>
+                            <p class="form-hint">Required for password reset emails. You may opt out of other notifications in your profile.</p>
                         </div>
                         <button type="submit" class="btn btn-primary btn-block btn-lg" id="fl-btn">Set Password &amp; Continue</button>
                     </form>
@@ -526,17 +622,20 @@ const App = (() => {
 
         document.getElementById('fl-form').addEventListener('submit', async e => {
             e.preventDefault();
-            const alertEl  = document.getElementById('fl-alert');
-            const btn      = document.getElementById('fl-btn');
-            const pass     = document.getElementById('fl-pass').value;
-            const confirm  = document.getElementById('fl-confirm').value;
-            const security = document.getElementById('fl-security').value.trim();
-            const email    = document.getElementById('fl-email').value.trim();
+            const alertEl    = document.getElementById('fl-alert');
+            const btn        = document.getElementById('fl-btn');
+            const pass       = document.getElementById('fl-pass').value;
+            const confirm    = document.getElementById('fl-confirm').value;
+            const sqQuestion = document.getElementById('fl-sq-question').value.trim();
+            const security   = document.getElementById('fl-security').value.trim();
+            const email      = document.getElementById('fl-email').value.trim();
 
             alertEl.innerHTML = '';
-            if (pass !== confirm)       { alertEl.innerHTML = ui.alertHTML('Passwords do not match.'); return; }
-            if (pass.length < 8)        { alertEl.innerHTML = ui.alertHTML('Password must be at least 8 characters.'); return; }
-            if (security.length < 3)    { alertEl.innerHTML = ui.alertHTML('Please provide a security answer (3+ characters).'); return; }
+            if (pass !== confirm)           { alertEl.innerHTML = ui.alertHTML('Passwords do not match.'); return; }
+            if (pass.length < 8)            { alertEl.innerHTML = ui.alertHTML('Password must be at least 8 characters.'); return; }
+            if (sqQuestion.length < 5)      { alertEl.innerHTML = ui.alertHTML('Please enter a security question (5+ characters).'); return; }
+            if (security.length < 3)        { alertEl.innerHTML = ui.alertHTML('Please provide a security answer (3+ characters).'); return; }
+            if (!email)                     { alertEl.innerHTML = ui.alertHTML('Email address is required.'); return; }
 
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span> Saving…';
@@ -549,7 +648,9 @@ const App = (() => {
 
                 await api.post('change_password', {
                     id: state.currentUser.id, passwordHash: pHash,
-                    encryptedEmail: encEmail, iv, salt, iterations: 100000, securityAnswer: security,
+                    encryptedEmail: encEmail, iv, salt, iterations: 100000,
+                    securityQuestion: sqQuestion, securityAnswer: security,
+                    email,
                 });
 
                 // Cache salt for future logins
@@ -558,6 +659,7 @@ const App = (() => {
 
                 state.cryptoKey = key;
                 state.currentUser.isFirstLogin = false;
+                state.currentUser.securityQuestion = sqQuestion;
                 sessionStorage.setItem('nhl_pool_user', JSON.stringify(state.currentUser));
 
                 ui.toast('Password set! Welcome to the pool.', 'success');
@@ -900,6 +1002,20 @@ const App = (() => {
     function renderProfile() {
         const u = state.currentUser;
         const container = document.getElementById('view-profile');
+        const safeUsername = escHtml(u.username || '');
+        const safeRole     = escHtml(u.role || '');
+        const safeInitial  = escHtml((u.username || '').charAt(0).toUpperCase());
+
+        // Payment status from users list (which has hasPaid)
+        const userRecord  = state.data.users.find(usr => usr.id === u.id);
+        const hasPaid     = userRecord?.hasPaid ?? u.hasPaid ?? false;
+        const paidAt      = userRecord?.paidAt  ?? null;
+        const emailOptOut = userRecord?.emailOptOut ?? u.emailOptOut ?? false;
+
+        const paymentBadge = hasPaid
+            ? `<span class="badge badge-success">✅ Paid${paidAt ? ' · ' + new Date(paidAt).toLocaleDateString() : ''}</span>`
+            : `<span class="badge badge-warning">⏳ Payment Pending</span>`;
+
         container.innerHTML = `
             <div class="app-content">
                 <div class="page-header">
@@ -913,15 +1029,30 @@ const App = (() => {
                         <div class="card-body">
                             <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;">
                                 <div class="user-avatar" style="width:3.5rem;height:3.5rem;font-size:1.5rem;">
-                                    ${u.username.charAt(0).toUpperCase()}
+                                    ${safeInitial}
                                 </div>
                                 <div>
-                                    <div class="font-bold" style="font-size:1.1rem;">${escHtml(u.username)}</div>
-                                    <div class="badge ${u.role === 'admin' ? 'badge-warning' : ''}">${u.role}</div>
+                                    <div class="font-bold" style="font-size:1.1rem;">${safeUsername}</div>
+                                    <div class="badge ${isAdmin(u) ? 'badge-warning' : ''}">${safeRole}</div>
                                 </div>
+                            </div>
+                            <div style="margin-bottom:1rem;">
+                                <span class="text-secondary" style="font-size:.85rem;">Pool Payment: </span>${paymentBadge}
                             </div>
                             <hr class="divider">
                             <button class="btn btn-secondary btn-block" id="btn-change-password">🔑 Change Password</button>
+                            <button class="btn btn-ghost btn-block" id="btn-update-security" style="margin-top:.75rem;">🛡️ Update Security Q&amp;A</button>
+                            <hr class="divider" style="margin-top:1rem;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;">
+                                <div>
+                                    <div style="font-weight:600;font-size:.9rem;">📧 Email Notifications</div>
+                                    <div class="text-secondary" style="font-size:.78rem;">Opt out of non-essential pool emails (e.g. reminders). Initial invite &amp; password-reset emails are always sent.</div>
+                                </div>
+                                <label class="toggle-switch" title="Toggle email notifications">
+                                    <input type="checkbox" id="toggle-email-opt-out" ${emailOptOut ? '' : 'checked'}>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -941,6 +1072,21 @@ const App = (() => {
         themes.renderSelector(document.getElementById('theme-selector-grid'));
 
         document.getElementById('btn-change-password').addEventListener('click', () => showChangePasswordModal());
+        document.getElementById('btn-update-security').addEventListener('click', () => showSecurityModal());
+
+        document.getElementById('toggle-email-opt-out').addEventListener('change', async function() {
+            const optOut = !this.checked; // checked = notifications ON = optOut false
+            try {
+                await api.post('update_user', { id: u.id, emailOptOut: optOut });
+                if (userRecord) userRecord.emailOptOut = optOut;
+                u.emailOptOut = optOut;
+                sessionStorage.setItem('nhl_pool_user', JSON.stringify(u));
+                ui.toast(optOut ? 'Email notifications disabled.' : 'Email notifications enabled.', 'success');
+            } catch (err) {
+                ui.toast(err.message || 'Failed to update email preference.', 'danger');
+                this.checked = !this.checked; // revert
+            }
+        });
     }
 
     function showChangePasswordModal() {
@@ -1015,6 +1161,136 @@ const App = (() => {
         });
     }
 
+    function showSecurityModal() {
+        const u = state.currentUser;
+        ui.showModal('Update Security Q&A', `
+            <div id="sq-alert"></div>
+            <form id="sq-form" novalidate>
+                <div class="form-group">
+                    <label class="form-label">Security Question</label>
+                    <input id="sq-question" type="text" class="form-input"
+                           placeholder="e.g. What city were you born in?"
+                           value="${escHtml(u.securityQuestion || '')}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Security Answer</label>
+                    <input id="sq-answer" type="text" class="form-input"
+                           placeholder="Your answer" autocomplete="off" required>
+                </div>
+                <p class="form-hint">This is used for account recovery.</p>
+                <div class="modal-footer" style="padding:0;border:none;margin-top:1rem;">
+                    <button type="button" class="btn btn-ghost" onclick="App.ui.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="sq-btn">Save</button>
+                </div>
+            </form>
+        `);
+
+        document.getElementById('sq-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            const alertEl  = document.getElementById('sq-alert');
+            const btn      = document.getElementById('sq-btn');
+            const question = document.getElementById('sq-question').value.trim();
+            const answer   = document.getElementById('sq-answer').value.trim();
+
+            alertEl.innerHTML = '';
+            if (question.length < 5) { alertEl.innerHTML = ui.alertHTML('Please enter a security question (5+ characters).'); return; }
+            if (answer.length < 3)   { alertEl.innerHTML = ui.alertHTML('Please enter a security answer (3+ characters).'); return; }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>';
+            try {
+                await api.post('update_security', {
+                    id: u.id,
+                    securityQuestion: question,
+                    securityAnswer: answer,
+                });
+                state.currentUser.securityQuestion = question;
+                sessionStorage.setItem('nhl_pool_user', JSON.stringify(state.currentUser));
+                ui.closeModal();
+                ui.toast('Security Q&A updated successfully!', 'success');
+            } catch (err) {
+                alertEl.innerHTML = ui.alertHTML(err.message || 'Failed to update security Q&A.');
+                btn.disabled = false;
+                btn.textContent = 'Save';
+            }
+        });
+    }
+
+    // ─────────────────────────────────────────────────
+    // View: Help / How to Play
+    // ─────────────────────────────────────────────────
+    function renderHelp() {
+        const s = state.data.settings;
+        document.getElementById('view-help').innerHTML = `
+            <div class="app-content">
+                <div class="page-header">
+                    <h2>❓ How to Play</h2>
+                    <p>${escHtml(s.poolName || 'NHL Losers Pool')} · ${s.seasonYear || new Date().getFullYear()} Season</p>
+                </div>
+
+                <div class="card" style="margin-bottom:1.5rem;">
+                    <div class="card-header"><h3>🏒 The Goal</h3></div>
+                    <div class="card-body">
+                        <p>This is a <strong>Losers Pool</strong> — the twist is that you're rooting for teams to <strong>lose</strong>!</p>
+                        <p style="margin-top:.75rem;">Each weekend you pick <strong>one NHL game</strong> and choose the team you think will <strong>lose</strong> that game.</p>
+                        <ul style="margin-top:.75rem;padding-left:1.25rem;line-height:2;">
+                            <li>✅ <strong>Correct loser pick</strong> = Safe (0 penalty points)</li>
+                            <li>❌ <strong>Wrong pick</strong> (you picked the team that won) = +1 Penalty</li>
+                        </ul>
+                        <p style="margin-top:.75rem;">The player with the <strong>fewest penalties</strong> at the end of the season wins the pool!</p>
+                        <p class="text-secondary" style="margin-top:.5rem;font-size:.875rem;">Tiebreaker: most total correct loser picks (safe picks).</p>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom:1.5rem;">
+                    <div class="card-header"><h3>📅 Pick Deadlines</h3></div>
+                    <div class="card-body">
+                        <ul style="padding-left:1.25rem;line-height:2.2;">
+                            <li>🟢 <strong>Monday–Thursday</strong> — Picks are open. Submit or change your pick any time.</li>
+                            <li>🔒 <strong>Friday midnight MST through Sunday</strong> — Picks are locked. No changes allowed.</li>
+                            <li>📝 You may only submit <strong>one pick per weekend</strong>, but you can change it before the deadline.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom:1.5rem;">
+                    <div class="card-header"><h3>💳 Buy-In &amp; Prizes</h3></div>
+                    <div class="card-body">
+                        <p>Each player pays a <strong>$${escHtml(String(s.buyIn || 20))} buy-in</strong> to participate.</p>
+                        <p style="margin-top:.75rem;">The pool pot is divided among the top finishers — exact prize structure is set by the pool administrator.</p>
+                        <p style="margin-top:.75rem;"><strong>Everyone pays</strong> — including the admin. No free rides! 🏒</p>
+                        <p class="text-secondary" style="margin-top:.5rem;font-size:.875rem;">
+                            Your payment status is shown on your profile page. Contact the admin if you've paid but your status hasn't been updated.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom:1.5rem;">
+                    <div class="card-header"><h3>🔑 Account &amp; Password</h3></div>
+                    <div class="card-body">
+                        <ul style="padding-left:1.25rem;line-height:2.2;">
+                            <li>You were invited by the admin and received a <strong>temporary password by email</strong>.</li>
+                            <li>On first login you must set a <strong>permanent password</strong>, a <strong>security question &amp; answer</strong>, and your <strong>email address</strong>.</li>
+                            <li>If you ever forget your password, use <strong>Forgot Password?</strong> on the login page — answer your security question and a new temporary password will be emailed to you.</li>
+                            <li>You can change your password or security Q&amp;A at any time from your <strong>Profile</strong> page.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h3>📧 Email Notifications</h3></div>
+                    <div class="card-body">
+                        <p>The following emails are <strong>always sent</strong> regardless of preferences:</p>
+                        <ul style="padding-left:1.25rem;line-height:2;margin:.5rem 0;">
+                            <li>Initial invite with your temporary password</li>
+                            <li>Password reset emails</li>
+                        </ul>
+                        <p style="margin-top:.75rem;">All other pool notifications (reminders, results, etc.) can be toggled on your <strong>Profile</strong> page.</p>
+                    </div>
+                </div>
+            </div>`;
+    }
+
     // ═══════════════════════════════════════════════════
     // Auth helpers
     // ═══════════════════════════════════════════════════
@@ -1029,7 +1305,7 @@ const App = (() => {
 
         // Show/hide admin nav items
         document.querySelectorAll('.nav-admin').forEach(el => {
-            el.style.display = u.role === 'admin' ? '' : 'none';
+            el.style.display = isAdmin(u) ? 'list-item' : 'none';
         });
     }
 
@@ -1061,6 +1337,14 @@ const App = (() => {
         const d = document.createElement('div');
         d.appendChild(document.createTextNode(String(str ?? '')));
         return d.innerHTML;
+    }
+
+    function normalizeRole(role) {
+        return String(role ?? '').trim().toLowerCase();
+    }
+
+    function isAdmin(user) {
+        return normalizeRole(user?.role) === 'admin';
     }
 
     function resultBadge(result) {
@@ -1098,7 +1382,7 @@ const App = (() => {
         document.querySelectorAll('.nav-link[data-view]').forEach(link => {
             link.addEventListener('click', () => {
                 const target = link.dataset.view;
-                if (target === 'admin' && state.currentUser?.role !== 'admin') return;
+                if (target === 'admin' && !isAdmin(state.currentUser)) return;
                 router.navigate(target);
                 // Close sidebar on mobile
                 document.getElementById('app-nav')?.classList.remove('open');
@@ -1132,6 +1416,7 @@ const App = (() => {
             if (saved) {
                 try {
                     state.currentUser = JSON.parse(saved);
+                    state.currentUser.role = normalizeRole(state.currentUser.role) || 'player';
                     await loadAppData();
                     showAuthNav();
                     ui.hideLoading();
