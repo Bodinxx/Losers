@@ -77,6 +77,11 @@ if (basename($_SERVER['PHP_SELF']) !== 'index.php') {
                 </button>
             </li>
             <li>
+                <button class="nav-link" data-view="help" aria-label="How to Play">
+                    <span class="nav-icon">❓</span> How to Play
+                </button>
+            </li>
+            <li>
                 <button class="nav-link" data-view="profile" aria-label="Profile">
                     <span class="nav-icon">👤</span> Profile
                 </button>
@@ -117,6 +122,9 @@ if (basename($_SERVER['PHP_SELF']) !== 'index.php') {
 
         <!-- Profile / Settings -->
         <div id="view-profile" class="view hidden"></div>
+
+        <!-- Help / How to Play -->
+        <div id="view-help" class="view hidden"></div>
 
         <!-- Admin Panel -->
         <div id="view-admin" class="view hidden"></div>
